@@ -319,6 +319,13 @@ userauth(#ssh_msg_userauth_info_request{} = Msg,
 	    {next_state, userauth, next_packet(State#state{ssh_params = Ssh})}
     catch 	
 	#ssh_msg_disconnect{} = DisconnectMsg ->
+           handle_disconnect(DisconnectMsg, State);
+       {no_io_allowed, _Reason} = Error ->
+           Desc = io_lib:format("Server wanted I/O but it's not allowed. Error: ~p", [Error]),
+           DisconnectMsg =
+               #ssh_msg_disconnect{code = ?SSH_DISCONNECT_BY_APPLICATION,
+                   description = lists:flatten(Desc),
+                   language = "en"},
 	    handle_disconnect(DisconnectMsg, State)
     end;
 
@@ -609,7 +616,7 @@ terminate(Reason, _, State) ->
 			 [Reason]),
     DisconnectMsg = 
 	#ssh_msg_disconnect{code = ?SSH_DISCONNECT_CONNECTION_LOST,
-			    description = Desc,
+                           description = lists:flatten(Desc),
 			    language = "en"},
     handle_disconnect(DisconnectMsg, State).
 
