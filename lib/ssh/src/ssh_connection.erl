@@ -377,8 +377,13 @@ handle_msg(#ssh_msg_channel_failure{recipient_channel = ChannelId},
 
 handle_msg(#ssh_msg_channel_eof{recipient_channel = ChannelId}, 
 	    #connection{channel_cache = Cache} = Connection0, _, _) ->
-    Channel = ssh_channel:cache_lookup(Cache, ChannelId), 
-    {Reply, Connection} = reply_msg(Channel, Connection0, {eof, ChannelId}),
+    {Reply, Connection} =
+       case ssh_channel:cache_lookup(Cache, ChannelId) of
+           undefined ->
+               {[], Connection0};
+           Channel ->
+               reply_msg(Channel, Connection0, {eof, ChannelId})
+       end,
     {{replies, [Reply]}, Connection};
    
 handle_msg(#ssh_msg_channel_close{recipient_channel = ChannelId},   
