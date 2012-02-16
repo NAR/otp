@@ -413,13 +413,16 @@ handle_msg(#ssh_msg_channel_data{recipient_channel = ChannelId,
 				 data = Data}, 
 	   #connection{channel_cache = Cache} = Connection0, _, _) ->
     
-    #channel{recv_window_size = Size} = Channel =
-	ssh_channel:cache_lookup(Cache, ChannelId), 
+    {Replies, Connection} =
+       case ssh_channel:cache_lookup(Cache, ChannelId) of
+           undefined ->
+               {[], Connection0};
+           #channel{recv_window_size = Size} = Channel ->
     WantedSize = Size - size(Data),
     ssh_channel:cache_update(Cache, Channel#channel{
 				      recv_window_size = WantedSize}),
-    {Replies, Connection} = 
-	channel_data_reply(Cache, Channel, Connection0, 0, Data),
+               channel_data_reply(Cache, Channel, Connection0, 0, Data)
+       end,
     {{replies, Replies}, Connection};
 
 handle_msg(#ssh_msg_channel_extended_data{recipient_channel = ChannelId,

@@ -607,6 +607,12 @@ call(Pid, Msg, Timeout) ->
 	Result ->
 	    Result
     catch
+	% The connection manager is stopped, possibly because the connection is
+	% closed from the remote side. To avoid dumping huge amount of stuff into
+	% the NETSim logs, let's supress this error here. If the connection
+	% manager crashed, we should have a useful log anyway.
+	exit:{noproc, _} ->
+	    {error, channel_closed};
 	exit:{timeout, _} ->
 	    {error, timeout};
 	exit:{normal, _} ->
@@ -624,6 +630,10 @@ decode_ssh_msg(Msg) ->
     Msg.
 
 
+send_msg([]) ->
+    % The channel is already closed, so don't try to send anything,
+    % that would just lead to an error report
+    ok;
 send_msg(Msg) ->
     case catch do_send_msg(Msg) of
 	{'EXIT', Reason}->
