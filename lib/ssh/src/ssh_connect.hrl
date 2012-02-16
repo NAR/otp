@@ -240,6 +240,7 @@
 	  local_id,           %% local channel id
 
 	  recv_window_size,
+         bytes_not_adjusted=0,
 	  recv_packet_size,
 	  recv_close = false,
 

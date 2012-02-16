@@ -454,11 +454,17 @@ handle_cast({adjust_window, ChannelId, Bytes},
 	    #state{connection = Pid, connection_state =
 		   #connection{channel_cache = Cache}} = State) ->
     case ssh_channel:cache_lookup(Cache, ChannelId) of
-	#channel{recv_window_size = WinSize, remote_id = Id} = Channel ->
+        #channel{recv_window_size = WinSize, bytes_not_adjusted=BytesNotAdjusted, remote_id = Id} = Channel ->
+            if WinSize < (?DEFAULT_WINDOW_SIZE/2) ->
 	    ssh_channel:cache_update(Cache, Channel#channel{recv_window_size = 
-					       WinSize + Bytes}),
-	    Msg = ssh_connection:channel_adjust_window_msg(Id, Bytes),
+                                                  WinSize + Bytes + BytesNotAdjusted,
+                                                  bytes_not_adjusted = 0}),
+                Msg = ssh_connection:channel_adjust_window_msg(Id, Bytes + BytesNotAdjusted),
 	    send_msg({connection_reply, Pid, Msg});
+            true ->
+               ssh_channel:cache_update(Cache, Channel#channel{recv_window_size = WinSize,
+                                                  bytes_not_adjusted = Bytes + BytesNotAdjusted})
+            end;
 	undefined -> 
 	    ignore
     end,
