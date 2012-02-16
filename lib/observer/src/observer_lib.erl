@@ -341,8 +341,7 @@ user_term(Parent, Title, Default) ->
 	    wxTextEntryDialog:destroy(Dialog),
 	    parse_string(ensure_last_is_dot(Str));
 	?wxID_CANCEL ->
-	    wxTextEntryDialog:destroy(Dialog),
-	    cancel
+	    wxTextEntryDialog:destroy(Dialog)
     end.
 
 parse_string(Str) ->

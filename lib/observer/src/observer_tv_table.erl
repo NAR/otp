@@ -408,11 +408,7 @@ handle_info(refresh_interval, State = #state{pid=Pid}) ->
     {noreply, State};
 
 handle_info({error, Error}, State = #state{frame=Frame}) ->
-    ErrorStr =
-	try io_lib:format("~ts", [Error]), Error
-	catch _:_ -> io_lib:format("~p", [Error])
-	end,
-    Dlg = wxMessageDialog:new(Frame, ErrorStr),
+    Dlg = wxMessageDialog:new(Frame, Error),
     wxMessageDialog:showModal(Dlg),
     wxMessageDialog:destroy(Dlg),
     {noreply, State};
@@ -603,11 +599,8 @@ search([Str, Row, Dir0, CaseSens],
 	      true -> 1;
 	      false -> -1
 	  end,
-    Res = case re:compile(Str, Opt) of
-	      {ok, Re} ->
-		  search(Row, Dir, Re, Table);
-	      {error, _} -> false
-	  end,
+    {ok, Re} = re:compile(Str, Opt),
+    Res = search(Row, Dir, Re, Table),
     Parent ! {self(), Res},
     S#holder{search=Res}.
 
