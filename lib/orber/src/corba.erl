@@ -313,7 +313,7 @@ resolve_initial_references_remote(ObjectId, [RemoteModifier| Rest], Ctx)
   when is_list(RemoteModifier) ->
     case lists:prefix("iiop://", RemoteModifier) of
        true ->
-	    [_, Host, Port] = string:tokens(RemoteModifier, ":/"),
+            [Host, Port] =  get_host_and_port(RemoteModifier),
 	    IOR = iop_ior:create_external(orber:giop_version(), "", 
 				 Host, list_to_integer(Port), "INIT"),
 	    %% We know it's an external referens. Hence, no need to check.
@@ -334,7 +334,7 @@ list_initial_services_remote([], _Ctx) ->
 list_initial_services_remote([RemoteModifier| Rest], Ctx) when is_list(RemoteModifier) ->
     case lists:prefix("iiop://", RemoteModifier) of
 	true ->
-	    [_, Host, Port] = string:tokens(RemoteModifier, ":/"),
+            [Host, Port] =  get_host_and_port(RemoteModifier),
 	    IOR = iop_ior:create_external(orber:giop_version(), "", 
 					  Host, list_to_integer(Port), "INIT"),
 	    %% We know it's an external referens. Hence, no need to check.
@@ -348,6 +348,11 @@ list_initial_services_remote([RemoteModifier| Rest], Ctx) when is_list(RemoteMod
 list_initial_services_remote(_, _) ->
     raise(#'BAD_PARAM'{completion_status=?COMPLETED_NO}).
 
+get_host_and_port(RemoteModifier) ->
+    [_, HostAndPort] =  string:tokens(RemoteModifier, "//"),
+    Port = string:sub_string(HostAndPort,string:rchr(HostAndPort, $:)+1),
+    Host = string:sub_string(HostAndPort, 1, string:rchr(HostAndPort, $:)-1),
+    [Host, Port].
 
 
 %%-----------------------------------------------------------------
