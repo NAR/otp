@@ -141,17 +141,20 @@ connect(ConnectionSup, Address, Port, SocketOpts, Opts) ->
 	proplists:get_value(transport, Opts, {tcp, gen_tcp, tcp_closed}),
     case do_connect(Callback, Address, Port, SocketOpts, Timeout) of
  	{ok, Socket} ->
-	    {ok, Pid} = 
-		ssh_connection_controler:start_handler_child(ConnectionSup,
+           case ssh_connection_controler:start_handler_child(ConnectionSup,
 						       [client, Socket,
 							[{address, Address},
 							 {port, Port} |
-							 Opts]]), 
+                                                        Opts]]) of
+               {ok, Pid} ->
 	    Callback:controlling_process(Socket, Pid),
 	    ssh_connection_handler:send_event(Pid, socket_control),
 	    {ok, Pid};
 	{error, Reason} ->
 	    {error, Reason} 
+           end;
+       {error, Reason} ->
+           {error, Reason}
     end.
 
 do_connect(Callback, Address, Port, SocketOpts, Timeout) ->

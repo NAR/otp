@@ -97,8 +97,12 @@ terminate(_Reason, #state{}) ->
 %% Func: handle_call/3
 %%-----------------------------------------------------------------
 handle_call({handler, Pid, [Role, Socket, Opts]}, _From, State) ->
-    {ok, Handler} = ssh_connection_handler:start_link(Role, Pid, Socket, Opts),
+    case ssh_connection_handler:start_link(Role, Pid, Socket, Opts) of
+       {ok, Handler} ->
     {reply, {ok, Handler}, State#state{handler = Handler}};
+       {error, _Reason} = Error ->
+           {stop, normal, Error, State}
+    end;
 handle_call({manager, [server = Role, Socket, Opts, SubSysSup]}, _From, State) ->
     {ok, Manager} = ssh_connection_manager:start_link([Role, Socket, Opts, SubSysSup]),
     {reply, {ok, Manager}, State#state{manager = Manager}};

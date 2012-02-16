@@ -39,15 +39,16 @@
 
 %% gen_fsm callbacks
 -export([hello/2, kexinit/2, key_exchange/2, new_keys/2,
-	 userauth/2, connected/2]).
+        userauth/2, connected/2, uninitialized/3]).
 
--export([init/1, state_name/3, handle_event/3,
+-export([init/1, handle_event/3,
 	 handle_sync_event/4, handle_info/3, terminate/3, code_change/4]).
 
 %% spawn export
 -export([ssh_info_handler/3]).
 
 -record(state, {
+         role,                    % client | server
 	  transport_protocol,      % ex: tcp
 	  transport_cb,
 	  transport_close_tag,
@@ -71,13 +72,19 @@
 %% Internal application API
 %%====================================================================
 %%--------------------------------------------------------------------
-%% Function: start_link() -> ok,Pid} | ignore | {error,Error}
+%% Function: start_link() -> {ok,Pid} | ignore | {error,Error}
 %% Description:Creates a gen_fsm process which calls Module:init/1 to
 %% initialize. To ensure a synchronized start-up procedure, this function
 %% does not return until Module:init/1 has returned.  
 %%--------------------------------------------------------------------
 start_link(Role, Manager, Socket, Options) ->
-    gen_fsm:start_link(?MODULE, [Role, Manager, Socket, Options], []).
+    {ok, Pid} = gen_fsm:start_link(?MODULE, [Role, Manager, Socket, Options], []),
+    case gen_fsm:sync_send_event(Pid, initialize) of
+       {error, _Reason} = Error ->
+           Error;
+       ok ->
+           {ok, Pid}
+    end.
 
 send(ConnectionHandler, Data) ->
     send_all_state_event(ConnectionHandler, {send, Data}).
@@ -106,19 +113,11 @@ peer_address(ConnectionHandler) ->
 %% initialize. 
 %%--------------------------------------------------------------------
 init([Role, Manager, Socket, SshOpts]) ->
-    {NumVsn, StrVsn} = ssh_transport:versions(Role, SshOpts),
-    ssh_bits:install_messages(ssh_transport:transport_messages(NumVsn)),
-    {Protocol, Callback, CloseTag} = 
-	proplists:get_value(transport, SshOpts, {tcp, gen_tcp, tcp_closed}),
-    Ssh = init_ssh(Role, NumVsn, StrVsn, SshOpts, Socket),
-    {ok, hello, #state{ssh_params = 
-		       Ssh#ssh{send_sequence = 0, recv_sequence = 0}, 
+    {ok, uninitialized, #state{
+              role = Role,
 		       socket = Socket,
 		       decoded_data_buffer = <<>>,
 		       encoded_data_buffer = <<>>,
-		       transport_protocol = Protocol, 
-		       transport_cb = Callback,
-		       transport_close_tag = CloseTag,
 		       manager = Manager,
 		       opts = SshOpts
 		      }}.
@@ -419,9 +418,25 @@ connected({#ssh_msg_kexinit{}, _Payload} = Event, State) ->
 %% gen_fsm:sync_send_event/2,3, the instance of this function with the same
 %% name as the current state name StateName is called to handle the event.
 %%--------------------------------------------------------------------
-state_name(_Event, _From, State) ->
-    Reply = ok,
-    {reply, Reply, state_name, State}.
+uninitialized(initialize, _From, #state{role = Role, socket = Socket, opts = SshOpts}=State) ->
+    {NumVsn, StrVsn} = ssh_transport:versions(Role, SshOpts),
+    ssh_bits:install_messages(ssh_transport:transport_messages(NumVsn)),
+    {Protocol, Callback, CloseTag} =
+       proplists:get_value(transport, SshOpts, {tcp, gen_tcp, tcp_closed}),
+    case init_ssh(Role, NumVsn, StrVsn, SshOpts, Socket) of
+       {error, Reason} = Error ->
+           Report = io_lib:format("~p Connection initiation problem: ~p~n",
+                                  [self(), Reason]),
+           error_logger:info_report(Report),
+           {stop, normal, Error, State};
+       Ssh ->
+           {reply, ok, hello, State#state{ssh_params =
+                      Ssh#ssh{send_sequence = 0, recv_sequence = 0},
+                      transport_protocol = Protocol,
+                      transport_cb = Callback,
+                      transport_close_tag = CloseTag
+                     }}
+    end.
 
 %%--------------------------------------------------------------------
 %% Function: 
@@ -641,22 +656,25 @@ init_ssh(client = Role, Vsn, Version, Options, Socket) ->
 
     AuthMethods = proplists:get_value(auth_methods, Options, 
 				      ?SUPPORTED_AUTH_METHODS),
-    {ok, PeerAddr} = inet:peername(Socket),
-    
-    PeerName =  proplists:get_value(host, Options),
-    KeyCb =  proplists:get_value(key_cb, Options, ssh_file),
+    case inet:peername(Socket) of
+       {error, _Reason} = Error ->
+           Error;
+        {ok, PeerAddr} ->
+	    PeerName =  proplists:get_value(host, Options),
+	    KeyCb =  proplists:get_value(key_cb, Options, ssh_file),
 
-    #ssh{role = Role,
-	 c_vsn = Vsn,
-	 c_version = Version,
-	 key_cb = KeyCb,
-	 io_cb = IOCb,
-	 userauth_quiet_mode = proplists:get_value(quiet_mode, Options, false),
-	 opts = Options,
-	 userauth_supported_methods = AuthMethods,
-	 peer = {PeerName, PeerAddr},
-	 available_host_keys = supported_host_keys(Role, KeyCb, Options)
-	};
+	    #ssh{role = Role,
+		 c_vsn = Vsn,
+		 c_version = Version,
+		 key_cb = KeyCb,
+		 io_cb = IOCb,
+		 userauth_quiet_mode = proplists:get_value(quiet_mode, Options, false),
+		 opts = Options,
+		 userauth_supported_methods = AuthMethods,
+		 peer = {PeerName, PeerAddr},
+		 available_host_keys = supported_host_keys(Role, KeyCb, Options)
+		}
+    end;
 
 init_ssh(server = Role, Vsn, Version, Options, Socket) ->
 
