@@ -66,7 +66,12 @@ stop_child(Pid) ->
     end.
 
 
-set_child_id(Port) -> {listener_srv, Port}.
+set_child_id(Config) ->
+    Address = proplists:get_value(bind_address, Config, no_address),
+    Port = proplists:get_value(port, Config, ?DEFAULT_PORT),
+    Fd = proplists:get_value(fd, Config, no_fd),
+    {listener_srv, {Address, Port, Fd}}.
+
 
 get_child_id(Pid) ->
 	case lists:keyfind(Pid, 2, supervisor:which_children(?MODULE)) of
@@ -76,7 +81,7 @@ get_child_id(Pid) ->
 
 get_listener_child_spec(SupPid, Config) ->
 	NewArgs = [ {sup_pid, SupPid} | Config],
-	ChildId = set_child_id(proplists:get_value(port, Config, ?DEFAULT_PORT)),
+	ChildId = set_child_id(Config),
 	{ChildId, {ftpd_listener, start_link, [NewArgs]},
        		     permanent, 100000, worker, [ftpd_listener]}.
 

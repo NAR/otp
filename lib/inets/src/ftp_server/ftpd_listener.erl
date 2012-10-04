@@ -36,10 +36,12 @@ loop(LSock, Args) ->
 	end.
 
 start_link(Args) ->
-	Port    = proplists:get_value(port, Args, ?DEFAULT_PORT),
-	Str     = lists:append("ftpd_listener_", integer_to_list(Port)),
-	RegName = list_to_atom(Str),
-	gen_server:start_link({local, RegName}, ?MODULE, Args, []).
+    Address = proplists:get_value(bind_address, Args, no_address),
+    Port    = proplists:get_value(port, Args, ?DEFAULT_PORT),
+    Fd 	    = proplists:get_value(fd, Args, no_fd),
+    Str     = lists:flatten(io_lib:format("ftpd_listener_~p:~p,~p", [Address, Port, Fd])),
+    RegName = list_to_atom(Str),
+    gen_server:start_link({local, RegName}, ?MODULE, Args, []).
 
 init(Args) ->
 	process_flag(trap_exit, true),
