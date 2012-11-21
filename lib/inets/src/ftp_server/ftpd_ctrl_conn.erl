@@ -206,14 +206,12 @@ handle_command(<<"STOR">>, _, Args) when ?is_anon(Args) ->
 	mk_rep(550, "Operation not permitted");
 
 handle_command(<<"STOR">>, ParamsBin, Args) ->
-	FullName = ?UTIL:binlist_to_string(ParamsBin),
-	FileName = ?UTIL:get_file_name(FullName),
-	ftpd_data_conn:send_msg(stor, {FileName, FullName, write}, Args);
+	FileName = ?UTIL:binlist_to_string(ParamsBin),
+	ftpd_data_conn:send_msg(stor, {FileName, write}, Args);
 
 handle_command(<<"APPE">>, ParamsBin, Args) ->
-	FullName = ?UTIL:binlist_to_string(ParamsBin),
-	FileName = ?UTIL:get_file_name(FullName),
-	ftpd_data_conn:send_msg(stor, {FileName, FullName, append}, Args);
+	FileName = ?UTIL:binlist_to_string(ParamsBin),
+	ftpd_data_conn:send_msg(stor, {FileName, append}, Args);
 
 handle_command(<<"CWD">>, ParamsBin, Args) ->
 	NewDir  = ?UTIL:binlist_to_string(ParamsBin),

@@ -112,14 +112,14 @@ data_conn_main(DataSock) ->
 					          "not found, not accessible",
 					send_ctrl_reply(Args, 550, RespStr)
 			end;
-		{stor, {FileName, FullClientName, Mode}, Args} ->
+		{stor, {FileName, Mode}, Args} ->
 			AbsPath = Args#ctrl_conn_data.chrootdir,
 			RelPath = Args#ctrl_conn_data.curr_path,
 			FPath   = ftpd_dir:normalize_filepath(AbsPath,RelPath,FileName),
 			Repr    = Args#ctrl_conn_data.repr_type,
 			case receive_and_store(DataSock, FPath, Mode, Repr) of
 				ok ->
-					TraceParams = [RelPath ++ "/" ++ FileName, FullClientName],
+					TraceParams = [filename:join(RelPath, FileName)],
 					?UTIL:tracef(Args, ?STOR, TraceParams),
 					transfer_complete(Args);
 				{error, _} ->

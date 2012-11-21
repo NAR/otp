@@ -479,8 +479,8 @@ upload_test(Config) ->
     EmptyFileName = ?config(empty_file_name, Config),
     DataFileName = ?config(data_file_name, Config),
     ftp:lcd(Ftp, PrivDir),
-    ok = ftp:send(Ftp, filename:join(PrivDir, EmptyFileName)),
-    ok = ftp:send(Ftp, filename:join(PrivDir, DataFileName)),
+    ok = ftp:send(Ftp, EmptyFileName),
+    ok = ftp:send(Ftp, filename:join(PrivDir, DataFileName), DataFileName),
     {ok, <<>>} = file:read_file(filename:join(DataDir, EmptyFileName)),
     {ok, <<"ABC">>} = file:read_file(filename:join(DataDir, DataFileName)).
 
