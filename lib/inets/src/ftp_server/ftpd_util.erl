@@ -27,7 +27,7 @@
          transformfrom/2, transformto/2,
          logf/3, tracef/3,
          list2portip/1, eprtlist2portip/1, get_server_ip/0, getaddr/1,
-         bin_to_upper/1, binlist_to_string/1]).
+         bin_to_upper/1, binlist_to_string/1, check_dir_in_chroot/2]).
 
 -include_lib("ftpd_rep.hrl").
 -include_lib("kernel/include/inet.hrl").
@@ -204,3 +204,24 @@ getaddr(Addr) ->
 		{error, _} -> inet:getaddr(Addr,inet6);
 		Res 	   -> Res
 	end.
+
+check_dir_in_chroot(RootDir, FullPath) ->
+    check_dir_in_chroot(RootDir, FullPath, 0).
+
+check_dir_in_chroot(_, _, 32) ->
+    false; % circular symlinks
+check_dir_in_chroot(RootDir, FullPath, LinkNum) ->
+    case lists:prefix(RootDir, FullPath) of
+	false ->
+	    % link points to the outside
+	    false;
+	true ->
+	    case file:read_link(FullPath) of
+		{error, _} ->
+		    % not a symlink, path is OK
+		    true;
+		{ok, LinkedTo} ->
+		    check_dir_in_chroot(RootDir, LinkedTo, LinkNum+1)
+	    end
+    end.
+	    

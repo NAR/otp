@@ -99,7 +99,7 @@ data_conn_main(DataSock) ->
 		{retr, FileName, Args} ->
 			AbsPath = Args#ctrl_conn_data.chrootdir,
 			RelPath = Args#ctrl_conn_data.curr_path,
-			FPath   = ftpd_dir:normalize_filepath(AbsPath,RelPath,FileName),
+			FPath   = ftpd_dir:canonicalize_path(AbsPath ++ filename:join(RelPath,FileName)),
 			case file:read_file(FPath) of
 				{ok, Bin} ->
 					BinT = ?UTIL:transformto(Bin,Args#ctrl_conn_data.repr_type),
@@ -115,7 +115,7 @@ data_conn_main(DataSock) ->
 		{stor, {FileName, Mode}, Args} ->
 			AbsPath = Args#ctrl_conn_data.chrootdir,
 			RelPath = Args#ctrl_conn_data.curr_path,
-			FPath   = ftpd_dir:normalize_filepath(AbsPath,RelPath,FileName),
+			FPath   = ftpd_dir:canonicalize_path(AbsPath ++ filename:join(RelPath,FileName)),
 			Repr    = Args#ctrl_conn_data.repr_type,
 			case receive_and_store(DataSock, FPath, Mode, Repr) of
 				ok ->

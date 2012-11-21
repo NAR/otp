@@ -20,109 +20,35 @@
 
 -module(ftpd_dir).
 
--export([set_cwd/3, normalize_filepath/3]).
+-export([list_dir/1,canonicalize_path/1]).
 
-normalize_filepath(Root, Cwd, ReqFile) ->
-	case hd(ReqFile) of
-		$/ -> slash_correct(Root ++ ReqFile);
-		_  -> slash_correct(Root ++ Cwd ++ "/" ++ ReqFile)
-	end.
+list_dir(DirName) ->
+    Path = canonicalize_path(DirName),
+    case file:list_dir(Path) of
+	{ok, FileNames} ->
+	    {ok, Path, FileNames};
+	{error, enotdir} ->
+	    % Path is a file
+	    {ok, Path, [filename:basename(Path)]};
+	_Error ->
+	    % Intentional: both the Solaris and Linux servers seems to
+	    % return empty data on error instead of error codes
+	    {ok, Path, []}
+    end.
 
-set_cwd(Root, Cwd, Req) ->
-	case lists:prefix("./", Req) of
-		true ->
-			NewReq = slash_correct(dot_correct(lists:nthtail(1, Req))),
-			cwd_fun(Root, Cwd, NewReq);
-		false ->
-			case lists:prefix("/", Req) of
-				false ->
-					NewReq = slash_correct(dot_correct(lists:append("/", Req))),
-					cwd_fun(Root, Cwd, NewReq);
-				true ->
-					NewReq = slash_correct(dot_correct(Req)),
-					cwd_fun(Root, "/", NewReq)
-			end
-	end.
+canonicalize_path(Path) ->
+    PathElements = filename:split(Path),
+    canonicalize_path(PathElements, "").
 
-slash_correct(Cwd) ->
-	case string:str(Cwd, "//") of
-		0     -> Cwd;
-		Index ->
-			Head = lists:sublist(Cwd, Index),
-			Tail = lists:nthtail(Index+1, Cwd),
-			slash_correct(lists:append(Head, Tail))
-	end.
-
-dot_correct(Cwd) ->
-	case string:str(Cwd, "/./") of
-		0     -> Cwd;
-		Index ->
-			Head = lists:sublist(Cwd, Index),
-			Tail = lists:nthtail(Index+2, Cwd),
-			dot_correct(lists:append(Head, Tail))
-	end.
-
-cwd_fun(Root, CwdAbsName, "") ->
-%	io:format("CwdAbs: ~p\n", [CwdAbsName]),
-	case lists:suffix("/", CwdAbsName) of
-		true ->
-			NewAbsName = lists:sublist(CwdAbsName, length(CwdAbsName)-1),
-			cwd_fun(Root, NewAbsName, "");
-		false ->
-			NewAbsName = lists:concat(["/", CwdAbsName]),
-			{ok, slash_correct(NewAbsName)}
-	end;
-%	io:format("SlashAbs: ~p\n", [slash_correct(NewAbsName)]),
-
-cwd_fun(Root, CwdAbsName, Req) ->
-%	io:format("~p\n", [Req]),
-	{Index, Acc, NewReq} = cdd_fun(Req, 0),
-	NewCwd = step_back(CwdAbsName, Acc),
-	case step_forward(Root, NewCwd, Index, NewReq) of
-		{ok, {NewAbsName, NextReq}} -> cwd_fun(Root, NewAbsName, NextReq);
-		{ok, ReturnName} -> {ok, ReturnName};
-		Error -> Error
-	end.
-
-step_forward(_, CwdAbsName, 0, "/.") ->
-	{ok, {CwdAbsName, ""}};
-
-step_forward(Root, CwdAbsName, 0, Req) ->
-	NewAbsName = string:join([CwdAbsName, Req], ""),
-	CorrectedAbsName = slash_correct(string:join([Root, NewAbsName], "")),
-	case {file:read_link(CorrectedAbsName), filelib:is_dir(CorrectedAbsName)} of
-		{{ok, NewPath}, _} -> 	NewReq = slash_correct(lists:concat([NewPath, "/", Req])),
-					set_cwd(Root, CwdAbsName, NewReq);
-					%{ok, {CwdAbsName, CorrectedNextReq}};
-		{{error, _}, true} -> {ok, {NewAbsName, ""}};
-		{{error, _}, false} -> {error, invalid_dir}
-	end;
-
-step_forward(Root, CwdAbsName, Index, Req) ->
-	{CurrPwd, NextReq} = lists:split(Index-1, Req),
-	NewAbsName = string:join([CwdAbsName, CurrPwd], ""),
-	CorrectedAbsName = slash_correct(string:join([Root, NewAbsName], "")),
-	case {file:read_link(CorrectedAbsName), filelib:is_dir(CorrectedAbsName)} of
-		{{ok, NewPath}, _} -> CorrectedNextReq = slash_correct(string:join([NewPath, NextReq], "/")),
-					set_cwd(Root, CwdAbsName, CorrectedNextReq);
-					%{ok, {CwdAbsName, CorrectedNextReq}};
-		{{error, _}, true} -> {ok, {NewAbsName, NextReq}};
-		{{error, _}, false} -> {error, invalid_dir}
-	end.
-
-step_back(CwdAbsName, 0) ->
-	CwdAbsName;
-step_back("", _) ->
-	"";
-step_back(CwdAbsName, Acc) ->
-	Pos = string:rchr(CwdAbsName, $/),
-	NewCwd = lists:sublist(CwdAbsName, Pos-1),
-	step_back(NewCwd, Acc-1).
-
-cdd_fun(Req, Acc) ->
-	case string:str(Req, "/..") of
-		0 -> {0, Acc, Req};
-		1 -> cdd_fun(lists:nthtail(3, Req), Acc+1);
-		Index -> {Index, Acc, Req}
-	end.
+canonicalize_path([], ResultList) ->
+    filename:join(lists:reverse(ResultList));
+canonicalize_path(["." | Rest], ResultList) ->
+    canonicalize_path(Rest, ResultList);
+% don't crash when somebody wants to go upper than the root
+canonicalize_path([".." | Rest], ["/"]) ->
+    canonicalize_path(Rest, ["/"]);
+canonicalize_path([".." | Rest], [_Parent | ResultList]) ->
+    canonicalize_path(Rest, ResultList);
+canonicalize_path([Dir | Rest], ResultList) ->
+    canonicalize_path(Rest, [Dir | ResultList]).
 

@@ -217,13 +217,19 @@ handle_command(<<"CWD">>, ParamsBin, Args) ->
 	NewDir  = ?UTIL:binlist_to_string(ParamsBin),
 	CurDir  = Args#ctrl_conn_data.curr_path,
 	BaseDir = Args#ctrl_conn_data.chrootdir,
-	case ftpd_dir:set_cwd(BaseDir, CurDir, NewDir) of
-		{ok, NewPath} ->
+	NewPath = ftpd_dir:canonicalize_path(filename:join(CurDir,NewDir)),
+	case filelib:is_dir(BaseDir++NewPath) of
+	    true ->
+		case ?UTIL:check_dir_in_chroot(BaseDir, BaseDir++NewPath) of
+		    true ->
 			?UTIL:tracef(Args, ?CWD, [NewPath]),
 			NewArgs = Args#ctrl_conn_data{ curr_path = NewPath },
 			mk_rep(250, "CWD command successful.", NewArgs);
-		{error, _} ->
+		    false ->
 			mk_rep(550, NewDir ++ ": No such file or directory")
+		end;
+	    false ->
+		mk_rep(550, NewDir ++ ": No such file or directory")
 	end;
 
 handle_command(<<"PWD">>, [], Args) ->
@@ -302,37 +308,25 @@ handle_command(<<"LIST">>, ParamsBin, Args) ->
 	DirToList = ?UTIL:binlist_to_string(ParamsBin),
 	AbsPath   = Args#ctrl_conn_data.chrootdir,
 	RelPath   = Args#ctrl_conn_data.curr_path,
-	case ftpd_dir:set_cwd(AbsPath, RelPath, DirToList) of
-		{ok, NewPath} ->
-			?UTIL:tracef(Args, ?LIST, [NewPath]),
-			FullPath    = AbsPath ++ NewPath,
-			case file:list_dir(FullPath) of
-				{ok, Files} ->
-					Data = {lists:sort(Files), FullPath, lst},
+	LocalPath = filename:join(RelPath, DirToList),
+	% the LocalPath starts with /, so filename:join would not work here, we
+	% have to concatenate the strings directly
+	{ok, DirPath, Files} =  ftpd_dir:list_dir(AbsPath++LocalPath),
+	?UTIL:tracef(Args, ?LIST, [LocalPath]),
+	Data = {lists:sort(Files), DirPath, lst},
 					ftpd_data_conn:send_msg(list, Data, Args);
-				{error, _} ->
-					mk_rep(450, DirToList ++ ": Error in listing")
-			end;
-		{error, _} ->
-			mk_rep(450, DirToList ++ ": No such file or directory")
-	end;
 
 handle_command(<<"NLST">>, ParamsBin, Args) ->
 	DirToList = ?UTIL:binlist_to_string(ParamsBin),
 	AbsPath   = Args#ctrl_conn_data.chrootdir,
 	RelPath   = Args#ctrl_conn_data.curr_path,
-	case ftpd_dir:set_cwd(AbsPath, RelPath, DirToList) of
-		{ok, NewPath} ->
-			case file:list_dir(AbsPath ++ NewPath) of
-				{ok, Files} ->
-					Data = {lists:sort(Files), "", nlst},
+	LocalPath = filename:join(RelPath, DirToList),
+	% the LocalPath starts with /, so filename:join would not work here, we
+	% have to concatenate the strings directly
+	{ok, DirPath, Files} =  ftpd_dir:list_dir(AbsPath++LocalPath),
+	?UTIL:tracef(Args, ?LIST, [LocalPath]),
+	Data = {lists:sort(Files), DirPath, nlst},
 					ftpd_data_conn:send_msg(list, Data, Args);
-				{error, _} ->
-					mk_rep(450, DirToList ++ ": Error in listing")
-			end;
-		{error, _} ->
-			mk_rep(450, DirToList ++ ": No such file or directory")
-	end;
 
 handle_command(<<"REIN">>, [], Args) ->
 	NewArgs = Args#ctrl_conn_data{ authed = false, username = none },
