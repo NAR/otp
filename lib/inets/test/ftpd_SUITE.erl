@@ -40,10 +40,12 @@
 	 ls_dir_test/1,
 	 ls_empty_dir_test/1,
 	 nlist_test/1,
+	 nlist_file_test/1,
 	 cd_test/1,
 	 pwd_test/1,
 	 download_test/1,
 	 upload_test/1,
+	 mkdir_test/1,
 	 fd_test/1,
 	 log_trace_test/1,
 	 chunk_test/1,
@@ -87,8 +89,9 @@ all() -> [
 groups() ->
     [{basic_tests, [], [start_stop_test, connect_test, multiple_servers_test, connect_v6_test, fd_test]},
      {login_tests, [], [login_success_test, login_failure_test, info_test]},
-     {directory_tests, [parallel], [ls_test, ls_dir_test, ls_empty_dir_test, nlist_test, cd_test, pwd_test]},
-     {download_upload_tests, [], [download_test, upload_test, chunk_test]},
+     {directory_tests, [parallel], [ls_test, ls_dir_test, ls_empty_dir_test, 
+	     nlist_test, nlist_file_test, cd_test, pwd_test]},
+     {download_upload_tests, [], [download_test, upload_test, mkdir_test, chunk_test]},
      {ipv6_tests, [], [ls_test, ls_dir_test, ls_empty_dir_test, cd_test, download_test, upload_test]},
      {log_trace_tests, [], [log_trace_test]},
      {negative_tests, [], [split_command_test, cd_up_from_root_test, cd_over_symlink_test,
@@ -167,6 +170,14 @@ init_per_testcase(upload_test, Config0) ->
     ok = file:write_file(filename:join(PrivDir, DataFileName), <<"ABC">>),
     [{empty_file_name, EmptyFileName}, {data_file_name, DataFileName}| Config];
 
+init_per_testcase(mkdir_test, Config0) ->
+    Config = ftp_connect(Config0),
+    PrivDir = ?config(priv_dir, Config),
+    RemoteDir = "remote_dir",
+    DataFileName = "data_upload",
+    ok = file:write_file(filename:join(PrivDir, DataFileName), <<"ABC">>),
+    [{remote_dir, RemoteDir}, {data_file_name, DataFileName}| Config];
+
 init_per_testcase(split_command_test, Config0) ->
     {ok, Sock} = gen_tcp:connect("localhost", 2021, [list, {active, false}, {nodelay, true}]),
     [{sock, Sock} | Config0];
@@ -231,6 +242,15 @@ end_per_testcase(upload_test, Config) ->
     DataFileName = ?config(data_file_name, Config),
     file:delete(filename:join(DataDir, EmptyFileName)),
     file:delete(filename:join(DataDir, DataFileName)),
+    ftp_close(Config);
+
+end_per_testcase(mkdir_test, Config) ->
+    % Remove the uploaded files
+    DataDir = ?config(data_dir, Config),
+    DataFileName = ?config(data_file_name, Config),
+    RemoteDir = ?config(remote_dir, Config),
+    file:delete(filename:join([DataDir, RemoteDir, DataFileName])),
+    file:del_dir(filename:join([DataDir, RemoteDir])),
     ftp_close(Config);
 
 end_per_testcase(split_command_test, Config) ->
@@ -401,6 +421,16 @@ nlist_test(Config) ->
     Lst=re:split(LsRoot, "\\r\\n", [trim]),
     [<<"dir">>, <<"empty">>, <<"empty_dir">>] = Lst.
 
+nlist_file_test(doc) ->
+    ["Test that the user can list a file from the current directory"];
+nlist_file_test(suite) ->
+    [];
+nlist_file_test(Config) ->
+    Ftp = ?config(ftp_pid, Config),
+    {ok, LsRoot} = ftp:nlist(Ftp, "empty"),
+    Lst=re:split(LsRoot, "\\r\\n", [trim]),
+    [<<"empty">>] = Lst.
+
 cd_test(doc) ->
     ["Test that the user can change a directory"];
 cd_test(suite) ->
@@ -433,6 +463,8 @@ download_test(Config) ->
     ftp:lcd(Ftp, PrivDir),
     ok = ftp:recv(Ftp, "empty"),
     ok = ftp:recv(Ftp, "dir/123", "123"),
+    {ok, <<"abc\n">>} = file:read_file(filename:join(PrivDir, "123")),
+    ok = ftp:recv(Ftp, "/dir/123", "123"),
     {ok, <<>>} = file:read_file(filename:join(PrivDir, "empty")),
     {ok, <<"abc\n">>} = file:read_file(filename:join(PrivDir, "123")).
 
@@ -451,6 +483,21 @@ upload_test(Config) ->
     ok = ftp:send(Ftp, filename:join(PrivDir, DataFileName)),
     {ok, <<>>} = file:read_file(filename:join(DataDir, EmptyFileName)),
     {ok, <<"ABC">>} = file:read_file(filename:join(DataDir, DataFileName)).
+
+mkdir_test(doc) ->
+    ["Test that the user can create a directory and upload a file there."];
+mkdir_test(suite) ->
+    [];
+mkdir_test(Config) ->
+    Ftp = ?config(ftp_pid, Config),
+    PrivDir = ?config(priv_dir, Config),
+    DataDir = ?config(data_dir, Config),
+    DataFileName = ?config(data_file_name, Config),
+    RemoteDir = ?config(remote_dir, Config),
+    ftp:lcd(Ftp, PrivDir),
+    ftp:mkdir(Ftp, RemoteDir),
+    ok = ftp:send(Ftp, filename:join(PrivDir, DataFileName), filename:join(RemoteDir, DataFileName)),
+    {ok, <<"ABC">>} = file:read_file(filename:join([DataDir, RemoteDir, DataFileName])).
 
 log_trace_test(doc) ->
     ["Check that logging and tracing works"];
