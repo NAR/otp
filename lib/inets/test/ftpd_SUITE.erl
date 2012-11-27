@@ -43,6 +43,8 @@
 	 nlist_file_test/1,
 	 cd_test/1,
 	 pwd_test/1,
+	 cd_ls_test/1,
+	 cd_nlist_test/1,
 	 download_test/1,
 	 upload_test/1,
 	 mkdir_test/1,
@@ -90,7 +92,7 @@ groups() ->
     [{basic_tests, [], [start_stop_test, connect_test, multiple_servers_test, connect_v6_test, fd_test]},
      {login_tests, [], [login_success_test, login_failure_test, info_test]},
      {directory_tests, [parallel], [ls_test, ls_dir_test, ls_empty_dir_test, 
-	     nlist_test, nlist_file_test, cd_test, pwd_test]},
+	     nlist_test, nlist_file_test, cd_test, pwd_test, cd_ls_test, cd_nlist_test]},
      {download_upload_tests, [], [download_test, upload_test, mkdir_test, chunk_test]},
      {ipv6_tests, [], [ls_test, ls_dir_test, ls_empty_dir_test, cd_test, download_test, upload_test]},
      {log_trace_tests, [], [log_trace_test]},
@@ -387,7 +389,7 @@ ls_test(Config) ->
     Ftp = ?config(ftp_pid, Config),
     {ok, LsRoot} = ftp:ls(Ftp),
     Lst=re:split(LsRoot, "\\r\\n", [trim]),
-	[Dir, Empty, EmptyDir] = Lst,
+    [Dir, Empty, EmptyDir] = Lst,
     match = re:run(Dir, "^d.*\sdir$", [{capture, none}]),
     match = re:run(Empty, "^-.*\s\0\s+\S+\s+\S+\s+\S+\s+\d+:\d+\s+empty$", [{capture, none}]),
     match = re:run(EmptyDir, "^d.*\sempty_dir$", [{capture, none}]).
@@ -429,7 +431,13 @@ nlist_file_test(Config) ->
     Ftp = ?config(ftp_pid, Config),
     {ok, LsRoot} = ftp:nlist(Ftp, "empty"),
     Lst=re:split(LsRoot, "\\r\\n", [trim]),
-    [<<"empty">>] = Lst.
+    [<<"empty">>] = Lst,
+    {ok, LsDir} = ftp:nlist(Ftp, "dir/123"),
+    LstDir=re:split(LsDir, "\\r\\n", [trim]),
+    [<<"dir/123">>] = LstDir,
+    {ok, LsAbsDir} = ftp:nlist(Ftp, "/dir/123"),
+    LstAbsDir=re:split(LsAbsDir, "\\r\\n", [trim]),
+    [<<"/dir/123">>] = LstAbsDir.
 
 cd_test(doc) ->
     ["Test that the user can change a directory"];
@@ -452,6 +460,32 @@ pwd_test(Config) ->
     {ok, "/"} = ftp:pwd(Ftp),
     ok = ftp:cd(Ftp, "dir"),
     {ok, "/dir"} = ftp:pwd(Ftp).
+
+cd_ls_test(doc) ->
+    ["Test that the ls command works from different directories"];
+cd_ls_test(suite) ->
+    [];
+cd_ls_test(Config) ->
+    Ftp = ?config(ftp_pid, Config),
+    {ok, LsRoot} = ftp:ls(Ftp),
+    ok = ftp:cd(Ftp, "dir"),
+    {ok, LsRoot} = ftp:ls(Ftp, ".."),
+    {ok, LsRoot} = ftp:ls(Ftp, "/").
+
+cd_nlist_test(doc) ->
+    ["Test that the nlst command works from different directories"];
+cd_nlist_test(suite) ->
+    [];
+cd_nlist_test(Config) ->
+    Ftp = ?config(ftp_pid, Config),
+    {ok, LsRoot} = ftp:nlist(Ftp),
+    [<<"dir">>, <<"empty">>, <<"empty_dir">>] = re:split(LsRoot, "\\r\\n", [trim]),
+    {ok, LsAbsRoot} = ftp:nlist(Ftp, "/"),
+    [<<"/dir">>, <<"/empty">>, <<"/empty_dir">>] = re:split(LsAbsRoot, "\\r\\n", [trim]),
+    ok = ftp:cd(Ftp, "dir"),
+    {ok, LsRelRoot} = ftp:nlist(Ftp, ".."),
+    [<<"../dir">>, <<"../empty">>, <<"../empty_dir">>] = re:split(LsRelRoot, "\\r\\n", [trim]),
+    {ok, LsAbsRoot} = ftp:nlist(Ftp, "/").
 
 download_test(doc) ->
     ["Test that the user can download files."];
