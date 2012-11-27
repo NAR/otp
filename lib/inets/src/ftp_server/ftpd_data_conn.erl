@@ -87,12 +87,8 @@ pasv_accept(LSock) ->
 data_conn_main(DataSock) ->
 	?LOG("~p PASV send loop\n", [DataSock]),
 	receive
-		{list, {FileNames, Path, ListType}, Args} ->
-			TempMsg =
-				[case ListType of
-					lst  -> ?UTIL:get_file_info(FN, Path);
-					nlst -> FN
-				end ++ "\r\n"|| FN <- FileNames],
+		{list, FileNames, Args} ->
+			TempMsg = [FN ++ "\r\n"|| FN <- FileNames],
 			FormattedMsg = lists:flatten(TempMsg),
 			?UTIL:send_message(DataSock, FormattedMsg),
 			transfer_complete(Args);

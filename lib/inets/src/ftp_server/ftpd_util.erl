@@ -23,7 +23,7 @@
 -export([format_address/2, packet_to_tokens/1, check_repr_type/1,
          response/2, send_reply/3, send_message/2,
          check_auth/2, implemented_msgs/0,
-         get_file_info/2, get_full_path/1, concat_paths/2,
+         get_file_info/1, get_full_path/1, concat_paths/2,
          transformfrom/2, transformto/2,
          logf/3, tracef/3,
          list2portip/1, eprtlist2portip/1, get_server_ip/0, getaddr/1,
@@ -31,6 +31,7 @@
 
 -include_lib("ftpd_rep.hrl").
 -include_lib("kernel/include/inet.hrl").
+-include_lib("kernel/include/file.hrl").
 
 %% Converts ip and port to "h1,h2,h3,h4,p1,p2" format
 format_address({A1, A2, A3, A4}, Port) ->
@@ -101,22 +102,24 @@ send_message(Sock, Str) ->
 
 %% Get file information
 %% drwxrwsr-x   3 47688    60000        4096 Dec-9-2005 empty
-get_file_info(FName, FullPath) ->
-	{ok, {file_info, Size, Type, _Access,
-	_AccTime, {{MY,MM,MD}, {MH,MMin,_MS}},
-	_CreTime,
-    Mode, Links,
-	_MajorDev, _MinorDev, _INode, UID, GID}}
-		= file:read_file_info(concat_paths(FullPath, FName)),
+get_file_info(FullPath) ->
+    {ok, FileInfo} = file:read_file_info(FullPath),
+    Size  = FileInfo#file_info.size,
+    Type  = FileInfo#file_info.type,
+    Mode  = FileInfo#file_info.mode,
+    Links = FileInfo#file_info.links,
+    UID   = FileInfo#file_info.uid,
+    GID   = FileInfo#file_info.gid,
+    {{MY,MM,MD}, {MH,MMin,_MS}} = FileInfo#file_info.mtime,
 
-	Time = lists:concat(case MY < current_year() of
-		true  -> [MY];
-		false -> [MH,":",MMin]
+    Time = lists:concat(case MY < current_year() of
+	    true  -> [MY];
+	    false -> [MH,":",MMin]
 	end),
 
-	lists:concat([get_type_letter(Type),get_modes(Mode),
-	" ",Links," ",UID," ",GID," ",Size," ",
-	httpd_util:month(MM)," ",MD," ",Time," ",FName]).
+    lists:concat([get_type_letter(Type),get_modes(Mode),
+	    " ",Links," ",UID," ",GID," ",Size," ",
+	    httpd_util:month(MM)," ",MD," ",Time," ",filename:basename(FullPath)]).
 
 get_type_letter(device)    -> "b";
 get_type_letter(directory) -> "d";

@@ -308,25 +308,17 @@ handle_command(<<"LIST">>, ParamsBin, Args) ->
 	DirToList = ?UTIL:binlist_to_string(ParamsBin),
 	AbsPath   = Args#ctrl_conn_data.chrootdir,
 	RelPath   = Args#ctrl_conn_data.curr_path,
-	LocalPath = filename:join(RelPath, DirToList),
-	% the LocalPath starts with /, so filename:join would not work here, we
-	% have to concatenate the strings directly
-	{ok, DirPath, Files} =  ftpd_dir:list_dir(AbsPath++LocalPath),
-	?UTIL:tracef(Args, ?LIST, [LocalPath]),
-	Data = {lists:sort(Files), DirPath, lst},
-					ftpd_data_conn:send_msg(list, Data, Args);
+	{ok, Files} =  ftpd_dir:long_list_dir(AbsPath, RelPath, DirToList),
+	?UTIL:tracef(Args, ?LIST, [filename:join([RelPath, DirToList])]),
+	ftpd_data_conn:send_msg(list, Files, Args);
 
 handle_command(<<"NLST">>, ParamsBin, Args) ->
 	DirToList = ?UTIL:binlist_to_string(ParamsBin),
 	AbsPath   = Args#ctrl_conn_data.chrootdir,
 	RelPath   = Args#ctrl_conn_data.curr_path,
-	LocalPath = filename:join(RelPath, DirToList),
-	% the LocalPath starts with /, so filename:join would not work here, we
-	% have to concatenate the strings directly
-	{ok, DirPath, Files} =  ftpd_dir:list_dir(AbsPath++LocalPath),
-	?UTIL:tracef(Args, ?LIST, [LocalPath]),
-	Data = {lists:sort(Files), DirPath, nlst},
-					ftpd_data_conn:send_msg(list, Data, Args);
+	{ok, Files} =  ftpd_dir:short_list_dir(AbsPath, RelPath, DirToList),
+	?UTIL:tracef(Args, ?LIST, [filename:join([RelPath, DirToList])]),
+	ftpd_data_conn:send_msg(list, Files, Args);
 
 handle_command(<<"REIN">>, [], Args) ->
 	NewArgs = Args#ctrl_conn_data{ authed = false, username = none },
