@@ -30,6 +30,7 @@
 	 init_per_suite/1, end_per_suite/1]).
 
 -export([start_stop_test/1,
+	 start_stop_standalone_test/1,
 	 connect_test/1,
 	 multiple_servers_test/1,
 	 connect_v6_test/1,
@@ -89,7 +90,7 @@ all() -> [
     ].
 
 groups() ->
-    [{basic_tests, [], [start_stop_test, connect_test, multiple_servers_test, connect_v6_test, fd_test]},
+    [{basic_tests, [], [start_stop_test, start_stop_standalone_test, connect_test, multiple_servers_test, connect_v6_test, fd_test]},
      {login_tests, [], [login_success_test, login_failure_test, info_test]},
      {directory_tests, [parallel], [ls_test, ls_dir_test, ls_empty_dir_test, 
 	     nlist_test, nlist_file_test, cd_test, pwd_test, cd_ls_test, cd_nlist_test]},
@@ -108,7 +109,7 @@ init_per_suite(Config) ->
     Config.
 
 end_per_suite(Config) ->
-    inets:stop(),
+    ok = inets:stop(),
     Config.
 
 init_per_group(basic_tests, Config) ->
@@ -146,13 +147,15 @@ end_per_group(log_trace_tests, Config) ->
     ets:delete(?config(table, Config)),
     ?config(table_owner, Config) ! test_finished,
     Pid = ?config(ftpd_pid, Config),
-    inets:stop(ftpd, Pid);
+    ok = inets:stop(ftpd, Pid);
 
 end_per_group(_Group, Config) ->
     Pid = ?config(ftpd_pid, Config),
-    inets:stop(ftpd, Pid).
+    ok = inets:stop(ftpd, Pid).
 
 init_per_testcase(start_stop_test, Config) ->
+    Config;
+init_per_testcase(start_stop_standalone_test, Config) ->
     Config;
 init_per_testcase(connect_test, Config) ->
     Config;
@@ -226,6 +229,8 @@ init_per_testcase(_Case, Config) ->
 
 end_per_testcase(start_stop_test, Config) ->
     Config;
+end_per_testcase(start_stop_standalone_test, Config) ->
+    Config;
 end_per_testcase(connect_test, Config) ->
     Config;
 end_per_testcase(multiple_servers_test, Config) ->
@@ -294,7 +299,27 @@ start_stop_test(suite) ->
     [];
 start_stop_test(_Config) ->
     {ok, Pid} = inets:start(ftpd, [{port, 2021}]),
-    inets:stop(ftpd, Pid).
+    ok = inets:stop(ftpd, Pid).
+
+start_stop_standalone_test(doc) ->
+    ["Test that the FTP server starts in standalone mode"];
+start_stop_standalone_test(suite) ->
+    [];
+start_stop_standalone_test(_Config) ->
+    TestPid = self(),
+    % start server from separate process, because the server will be linked to
+    % its starting process
+    spawn(fun() ->
+	{ok, Pid} = inets:start(ftpd, [{port, 2021}], stand_alone),
+	ok = inets:stop(stand_alone, Pid),
+	TestPid ! finished
+	end),
+    receive
+	finished ->
+	    ok
+    after 5000 ->
+	exit(test_not_finished)
+    end.
 
 connect_test(doc) ->
     ["Test that we can connect to the ftp server"];
@@ -304,7 +329,7 @@ connect_test(_Config) ->
     {ok, Pid} = inets:start(ftpd, [{port, 2021}]),
     {ok, Ftp} = ftp:open("localhost", [{port,2021}]),
     ok = ftp:close(Ftp),
-    inets:stop(ftpd, Pid).
+    ok = inets:stop(ftpd, Pid).
 
 multiple_servers_test(doc) ->
     ["Test that we can start and connect to multiple ftp servers in the same node"];
@@ -317,10 +342,10 @@ multiple_servers_test(_Config) ->
 	{ok, Pid2} = inets:start(ftpd, [{bind_address, {127,0,0,1}}, {port, 2121}]),
 	{ok, Ftp2} = ftp:open({127,0,0,1}, [{port,2121}]),
 	ok = ftp:close(Ftp2),
-	inets:stop(ftpd, Pid2)
+	ok = inets:stop(ftpd, Pid2)
     after
 	ok = ftp:close(Ftp1),
-	inets:stop(ftpd, Pid1)
+	ok = inets:stop(ftpd, Pid1)
     end.
 
 connect_v6_test(doc) ->
@@ -333,7 +358,7 @@ connect_v6_test(_Config) ->
 	{ok, Ftp} = ftp:open({0,0,0,0,0,0,0,1}, [{port,2021}, {ipfamily, inet6}]),
 	ok = ftp:close(Ftp)
     after
-	inets:stop(ftpd, Pid)
+	ok = inets:stop(ftpd, Pid)
     end.
 
 info_test(Config) ->
@@ -353,7 +378,7 @@ fd_test(_Config) ->
 	    {ok, Ftp} = ftp:open("localhost", [{port,2021}]),
 	    ok = ftp:close(Ftp)
 	after
-	    inets:stop(ftpd, Pid)
+	    ok = inets:stop(ftpd, Pid)
 	end
     after
 	% hack to close the file descriptor in case the test breaks
