@@ -377,7 +377,7 @@ key1search(Key, Vals, Def) ->
 %% Description: Returns a list of supported services
 %%-------------------------------------------------------------------
 service_names() ->
-    [ftpc, tftp, httpc, httpd].
+    [ftpc, tftp, httpc, httpd, ftpd].
 
 
 %%-----------------------------------------------------------------

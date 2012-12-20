@@ -167,6 +167,7 @@ MODULES =                 		\
 	ftp_windows_2003_server_test	\
 	ftp_suite_lib	  		\
 	ftp_ticket_test			\
+	ftpd_SUITE 	  		\
 	http_format_SUITE 		\
 	httpc_SUITE	  		\
 	httpc_cookie_SUITE		\
