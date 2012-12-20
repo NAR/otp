@@ -30,7 +30,7 @@
 -include_lib("ftpd_rep.hrl").
 
 start_link() ->
-	supervisor:start_link({local, ?MODULE}, ?MODULE, []).
+    supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 start_link(Config) ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, Config).
@@ -39,30 +39,30 @@ start_link(Config, stand_alone) ->
     supervisor:start_link(?MODULE, Config).
 
 stop(Pid) ->
-	exit(Pid,shutdown), %% TODO error reporting
-	ok.
+    exit(Pid,shutdown), %% TODO error reporting
+    ok.
 
 init([]) ->
-	{ok, {?SUP_SPEC, []}};
+    {ok, {?SUP_SPEC, []}};
 
 init(Config) ->
-	ChildSpec = get_listener_child_spec(self(), Config),
-	{ok, {?SUP_SPEC, [ChildSpec]}}.
+    ChildSpec = get_listener_child_spec(self(), Config),
+    {ok, {?SUP_SPEC, [ChildSpec]}}.
 
 start_child(Config) ->
-	ChildSpec = get_listener_child_spec(self(), Config),
-	supervisor:start_child(?MODULE, ChildSpec).
+    ChildSpec = get_listener_child_spec(self(), Config),
+    supervisor:start_child(?MODULE, ChildSpec).
 
 stop_child(Pid) ->
-	case get_child_id(Pid) of
-		{error, R} -> {error, R};
-		Id ->
-    		case supervisor:terminate_child(?MODULE, Id) of
-        		ok ->
-           			supervisor:delete_child(?MODULE, Id);
-        		Error ->
-            		Error
-			end
+    case get_child_id(Pid) of
+        {error, R} -> {error, R};
+        Id ->
+            case supervisor:terminate_child(?MODULE, Id) of
+                ok ->
+                       supervisor:delete_child(?MODULE, Id);
+                Error ->
+                    Error
+            end
     end.
 
 
@@ -74,14 +74,14 @@ set_child_id(Config) ->
 
 
 get_child_id(Pid) ->
-	case lists:keyfind(Pid, 2, supervisor:which_children(?MODULE)) of
-		{Id, Pid, _, _} -> Id;
-		_ -> {error, child_not_found}
-	end.
+    case lists:keyfind(Pid, 2, supervisor:which_children(?MODULE)) of
+        {Id, Pid, _, _} -> Id;
+        _ -> {error, child_not_found}
+    end.
 
 get_listener_child_spec(SupPid, Config) ->
-	NewArgs = [ {sup_pid, SupPid} | Config],
-	ChildId = set_child_id(Config),
-	{ChildId, {ftpd_listener, start_link, [NewArgs]},
-       		     permanent, 100000, worker, [ftpd_listener]}.
+    NewArgs = [ {sup_pid, SupPid} | Config],
+    ChildId = set_child_id(Config),
+    {ChildId, {ftpd_listener, start_link, [NewArgs]},
+                    permanent, 100000, worker, [ftpd_listener]}.
 
