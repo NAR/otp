@@ -52,6 +52,7 @@
 	 fd_test/1,
 	 log_trace_test/1,
 	 chunk_test/1,
+	 chunk_no_file_test/1,
 	 split_command_test/1,
          cd_up_from_root_test/1,
          cd_over_symlink_test/1,
@@ -94,7 +95,7 @@ groups() ->
      {login_tests, [], [login_success_test, login_failure_test, info_test]},
      {directory_tests, [parallel], [ls_test, ls_dir_test, ls_empty_dir_test, 
 	     nlist_test, nlist_file_test, cd_test, pwd_test, cd_ls_test, cd_nlist_test]},
-     {download_upload_tests, [], [download_test, upload_test, mkdir_test, chunk_test]},
+     {download_upload_tests, [], [download_test, upload_test, mkdir_test, chunk_test, chunk_no_file_test]},
      {ipv6_tests, [], [ls_test, ls_dir_test, ls_empty_dir_test, cd_test, download_test, upload_test]},
      {log_trace_tests, [], [log_trace_test]},
      {negative_tests, [], [split_command_test, cd_up_from_root_test, cd_over_symlink_test,
@@ -728,6 +729,18 @@ chunk_test(Config) ->
     Ftp = ?config(ftp_pid, Config),
     PrivDir = ?config(priv_dir, Config),
     ftp:lcd(Ftp, PrivDir),
-	ok = ftp:recv_chunk_start(Ftp, "dir/123"),
-	{ok, <<"abc\n">>} = ftp:recv_chunk(Ftp),
-	ok = ftp:recv_chunk(Ftp).
+    ok = ftp:recv_chunk_start(Ftp, "dir/123"),
+    {ok, <<"abc\n">>} = ftp:recv_chunk(Ftp),
+    ok = ftp:recv_chunk(Ftp).
+
+chunk_no_file_test(doc) ->
+    ["Test that an error is returned for non-exting file."];
+chunk_no_file_test(suite) ->
+    [];
+chunk_no_file_test(Config) ->
+    Ftp = ?config(ftp_pid, Config),
+    PrivDir = ?config(priv_dir, Config),
+    ftp:lcd(Ftp, PrivDir),
+    {error,_} = ftp:recv_chunk_start(Ftp, "dir/no_file"),
+    ok.
+

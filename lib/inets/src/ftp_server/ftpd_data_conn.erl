@@ -68,7 +68,6 @@ send_msg(MsgType, Msg, Args) ->
 	none ->
 	    send_ctrl_reply(Args, 500, "Data connection not established.");
 	DataPid ->
-	    send_ctrl_reply(Args, 150, "Opening BINARY mode data connection"),
 	    DataPid ! {MsgType, Msg, Args}
     end,
     {noreply, sameargs}.
@@ -90,6 +89,7 @@ data_conn_main(DataSock) ->
 	{list, FileNames, Args} ->
 	    TempMsg = [FN ++ "\r\n"|| FN <- FileNames],
 	    FormattedMsg = lists:flatten(TempMsg),
+	    send_ctrl_reply(Args, 150, "Opening BINARY mode data connection"),
 	    ?UTIL:send_message(DataSock, FormattedMsg),
 	    transfer_complete(Args);
 	{retr, FileName, Args} ->
@@ -99,6 +99,7 @@ data_conn_main(DataSock) ->
 	    case file:read_file(FPath) of
 		{ok, Bin} ->
 		    BinT = ?UTIL:transformto(Bin,Args#ctrl_conn_data.repr_type),
+		    send_ctrl_reply(Args, 150, "Opening BINARY mode data connection"),
 		    ?UTIL:send_message(DataSock, BinT),
 		    TraceParams = [RelPath ++ "/" ++ FileName, FileName],
 		    ?UTIL:tracef(Args, ?RETR, TraceParams), %% TODO 2nd param ??
@@ -113,7 +114,7 @@ data_conn_main(DataSock) ->
 	    RelPath = Args#ctrl_conn_data.curr_path,
 	    FPath   = ftpd_dir:canonicalize_path(AbsPath ++ filename:join(RelPath,FileName)),
 	    Repr    = Args#ctrl_conn_data.repr_type,
-	    case receive_and_store(DataSock, FPath, Mode, Repr) of
+	    case receive_and_store(Args, DataSock, FPath, Mode, Repr) of
 		ok ->
 		    TraceParams = [filename:join(RelPath, FileName)],
 		    ?UTIL:tracef(Args, ?STOR, TraceParams),
@@ -128,9 +129,10 @@ data_conn_main(DataSock) ->
     gen_tcp:close(DataSock).
 
 %% Receive binaries and store them in a file
-receive_and_store(DataSock, FPath, Mode, ReprType) ->
+receive_and_store(Args, DataSock, FPath, Mode, ReprType) ->
     case file:open(FPath, [Mode, binary]) of
 	{ok, Id} ->
+	    send_ctrl_reply(Args, 150, "Opening BINARY mode data connection"),
 	    Receive = receive_and_write_chunks(DataSock, Id, ReprType),
 	    Close   = file:close(Id),
 	    case {Receive, Close} of
